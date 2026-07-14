@@ -10,8 +10,8 @@
     ratingCount: 38,
     stock: 14,
     tag: 'HOT DEAL',
-    image: '/assets/headphones-1.jpg',
-    images: ['/assets/headphones-1.jpg', '/assets/headphones-2.jpg']
+    image: '/headphones.jpg',
+    images: ['/headphones.jpg']
   },
   {
     id: 2,
@@ -24,8 +24,8 @@
     ratingCount: 22,
     stock: 26,
     tag: 'BESTSELLER',
-    image: '/assets/earbuds-1.jpg',
-    images: ['/assets/earbuds-1.jpg', '/assets/earbuds-2.jpg']
+    image: '/earbuds.jpg',
+    images: ['/earbuds.jpg']
   },
   {
     id: 3,
@@ -38,8 +38,8 @@
     ratingCount: 14,
     stock: 18,
     tag: 'NEW RELEASE',
-    image: '/assets/humidifier-1.jpg',
-    images: ['/assets/humidifier-1.jpg', '/assets/humidifier-2.jpg']
+    image: '/humidifier.jpg',
+    images: ['/humidifier.jpg']
   },
   {
     id: 4,
@@ -52,8 +52,8 @@
     ratingCount: 19,
     stock: 12,
     tag: 'TRENDING',
-    image: '/assets/lamp-1.jpg',
-    images: ['/assets/lamp-1.jpg', '/assets/lamp-2.jpg']
+    image: '/lamp.jpg',
+    images: ['/lamp.jpg']
   }
 ];
 

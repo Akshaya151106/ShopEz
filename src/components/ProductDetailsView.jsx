@@ -269,14 +269,16 @@ export default function ProductDetailsView({ product, reviews, currentUser, onBa
               </p>
 
               {/* Specs Bullets */}
-              <div style={{ marginBottom: '28px' }}>
-                <h4 style={{ marginBottom: '12px', fontSize: '1.1rem' }}>Specifications</h4>
-                <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {product.specs.map((spec, i) => (
-                    <li key={i} style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>{spec}</li>
-                  ))}
-                </ul>
-              </div>
+              {Array.isArray(product.specs) && product.specs.length > 0 ? (
+                <div style={{ marginBottom: '28px' }}>
+                  <h4 style={{ marginBottom: '12px', fontSize: '1.1rem' }}>Specifications</h4>
+                  <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {product.specs.map((spec, i) => (
+                      <li key={i} style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>{spec}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
 
             {/* Cart Actions & Stock level */}
