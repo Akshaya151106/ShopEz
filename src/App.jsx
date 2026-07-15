@@ -10,12 +10,21 @@ import CheckoutFlow from './components/CheckoutFlow';
 import SellerDashboard from './components/SellerDashboard';
 import AuthView from './components/AuthView';
 
+const parseJSON = (value, fallback) => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.warn('Invalid JSON in localStorage, using fallback:', error);
+    return fallback;
+  }
+};
+
 const normalizeProduct = (product) => {
-  const image = product.image || '/headphones.jpg';
-  const images = Array.isArray(product.images) && product.images.length > 0
+  const image = product?.image || '/headphones.jpg';
+  const images = Array.isArray(product?.images) && product.images.length > 0
     ? product.images
     : [image];
-
   return {
     ...product,
     image,
@@ -27,23 +36,23 @@ export default function App() {
   // --- Persistent State Management ---
   const [products, setProducts] = useState(() => {
     const saved = localStorage.getItem('shopez_products');
-    const base = saved ? JSON.parse(saved) : initialProducts;
+    const base = parseJSON(saved, initialProducts);
     return Array.isArray(base) ? base.map(normalizeProduct) : initialProducts.map(normalizeProduct);
   });
 
   const [reviews, setReviews] = useState(() => {
     const saved = localStorage.getItem('shopez_reviews');
-    return saved ? JSON.parse(saved) : initialReviews;
+    return parseJSON(saved, initialReviews);
   });
 
   const [orders, setOrders] = useState(() => {
     const saved = localStorage.getItem('shopez_orders');
-    return saved ? JSON.parse(saved) : initialOrders;
+    return parseJSON(saved, initialOrders);
   });
 
   const [cart, setCart] = useState(() => {
     const saved = localStorage.getItem('shopez_cart');
-    return saved ? JSON.parse(saved) : [];
+    return parseJSON(saved, []);
   });
 
   // --- Authentication State ---
