@@ -10,11 +10,25 @@ import CheckoutFlow from './components/CheckoutFlow';
 import SellerDashboard from './components/SellerDashboard';
 import AuthView from './components/AuthView';
 
+const normalizeProduct = (product) => {
+  const image = product.image || '/headphones.jpg';
+  const images = Array.isArray(product.images) && product.images.length > 0
+    ? product.images
+    : [image];
+
+  return {
+    ...product,
+    image,
+    images,
+  };
+};
+
 export default function App() {
   // --- Persistent State Management ---
   const [products, setProducts] = useState(() => {
     const saved = localStorage.getItem('shopez_products');
-    return saved ? JSON.parse(saved) : initialProducts;
+    const base = saved ? JSON.parse(saved) : initialProducts;
+    return Array.isArray(base) ? base.map(normalizeProduct) : initialProducts.map(normalizeProduct);
   });
 
   const [reviews, setReviews] = useState(() => {
