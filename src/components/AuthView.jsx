@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { LogIn, UserPlus, Sparkles, User, Lock, Mail, Store, ShieldCheck, BarChart3, ShoppingBag } from 'lucide-react';
+import { loginUser, registerUser } from '../services/api';
 
-export default function AuthView({ users, onLogin, onRegister }) {
+export default function AuthView({ onLogin }) {
   const [activeTab, setActiveTab] = useState('login'); // 'login' or 'register'
   
   // Login Form States
@@ -16,41 +17,37 @@ export default function AuthView({ users, onLogin, onRegister }) {
   const [regPassword, setRegPassword] = useState('');
   const [regError, setRegError] = useState('');
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    const user = users.find(
-      u => u.username.toLowerCase() === loginUsername.trim().toLowerCase() && 
-      u.password === loginPassword
-    );
-
-    if (user) {
-      onLogin(user);
-    } else {
-      setLoginError('Invalid username or password. (Try username "alex" and password "password123")');
+    setLoginError('');
+    try {
+      const res = await loginUser(loginUsername, loginPassword);
+      if (res.user) {
+        onLogin(res.user);
+      }
+    } catch (err) {
+      setLoginError(err.message || 'Invalid username or password. (Try username "alex" and password "password123")');
     }
   };
 
-  const handleRegisterSubmit = (e) => {
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
+    setRegError('');
+    try {
+      const newUser = {
+        username: regUsername.trim(),
+        password: regPassword,
+        fullName: regFullName.trim(),
+        email: regEmail.trim()
+      };
 
-    if (users.some(u => u.username.toLowerCase() === regUsername.trim().toLowerCase())) {
-      setRegError('Username is already taken.');
-      return;
+      const res = await registerUser(newUser);
+      if (res.user) {
+        onLogin(res.user);
+      }
+    } catch (err) {
+      setRegError(err.message || 'Registration failed.');
     }
-    if (users.some(u => u.email.toLowerCase() === regEmail.trim().toLowerCase())) {
-      setRegError('Email is already registered.');
-      return;
-    }
-
-    const newUser = {
-      username: regUsername.trim(),
-      password: regPassword,
-      fullName: regFullName.trim(),
-      email: regEmail.trim()
-    };
-
-    onRegister(newUser);
-    onLogin(newUser); // Auto login
   };
 
   return (
@@ -75,7 +72,6 @@ export default function AuthView({ users, onLogin, onRegister }) {
         background: 'radial-gradient(circle at 10% 20%, rgba(var(--primary-glow-rgb), 0.15) 0%, transparent 60%)'
       }}>
         
-        {/* Floating Sparkles decoration */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '32px' }}>
           <Sparkles className="text-glow" size={36} style={{ color: 'var(--primary-glow)' }} />
           <h1 className="text-glow" style={{
@@ -96,10 +92,9 @@ export default function AuthView({ users, onLogin, onRegister }) {
         </h2>
         
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.15rem', lineHeight: '1.6', marginBottom: '40px', maxWidth: '480px' }}>
-          Experience a fluid e-commerce ecosystem. Effortlessly browse high-end items, access interactive buyer reviews, claim discounts, and monitor detailed seller sales analytics.
+          Experience a fluid e-commerce ecosystem powered by a real SQLite database. Browse items, access buyer reviews, claim discounts, and monitor sales analytics.
         </p>
 
-        {/* Feature Checkmarks list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -127,8 +122,8 @@ export default function AuthView({ users, onLogin, onRegister }) {
               <BarChart3 size={18} />
             </div>
             <div>
-              <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>Robust Analytics Dashboard</p>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Track revenue metrics, chart daily sales, and manage store stock.</p>
+              <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>SQLite Database Backend</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Track revenue metrics, chart daily sales, and update database inventory.</p>
             </div>
           </div>
 
@@ -153,7 +148,6 @@ export default function AuthView({ users, onLogin, onRegister }) {
           border: '1px solid var(--border-color)'
         }}>
           
-          {/* Modal Header Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', marginBottom: '32px' }}>
             <button
               onClick={() => { setActiveTab('login'); setLoginError(''); }}
@@ -243,7 +237,7 @@ export default function AuthView({ users, onLogin, onRegister }) {
 
               <div style={{ textAlign: 'center', marginTop: '10px' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Demo Accounts: username <b style={{ color: 'var(--text-secondary)' }}>alex</b> or <b style={{ color: 'var(--text-secondary)' }}>jane</b> with password <b style={{ color: 'var(--text-secondary)' }}>password123</b>.
+                  Database accounts: <b style={{ color: 'var(--text-secondary)' }}>alex</b> or <b style={{ color: 'var(--text-secondary)' }}>jane</b> with password <b style={{ color: 'var(--text-secondary)' }}>password123</b>.
                 </span>
               </div>
 
