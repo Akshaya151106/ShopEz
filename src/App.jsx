@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, LayoutDashboard, Store, Search, Sparkles, Palette, LogOut, Bell, X } from 'lucide-react';
-import { initialProducts, initialReviews, initialOrders, initialUsers } from './data/mockData';
+import { 
+  fetchProducts, 
+  fetchReviews, 
+  fetchOrders, 
+  createProduct, 
+  updateProduct, 
+  deleteProduct, 
+  createReview, 
+  createOrder, 
+  updateOrderStatus 
+} from './services/api';
 
 // Subcomponents
 import CatalogView from './components/CatalogView';
@@ -10,57 +20,20 @@ import CheckoutFlow from './components/CheckoutFlow';
 import SellerDashboard from './components/SellerDashboard';
 import AuthView from './components/AuthView';
 
-const parseJSON = (value, fallback) => {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch (error) {
-    console.warn('Invalid JSON in localStorage, using fallback:', error);
-    return fallback;
-  }
-};
-
-const normalizeProduct = (product) => {
-  const image = product?.image || '/headphones.jpg';
-  const images = Array.isArray(product?.images) && product.images.length > 0
-    ? product.images
-    : [image];
-  return {
-    ...product,
-    image,
-    images,
-  };
-};
-
 export default function App() {
-  // --- Persistent State Management ---
-  const [products, setProducts] = useState(() => {
-    const saved = localStorage.getItem('shopez_products');
-    const base = parseJSON(saved, initialProducts);
-    return Array.isArray(base) ? base.map(normalizeProduct) : initialProducts.map(normalizeProduct);
-  });
+  // --- Database State ---
+  const [products, setProducts] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [reviews, setReviews] = useState(() => {
-    const saved = localStorage.getItem('shopez_reviews');
-    return parseJSON(saved, initialReviews);
-  });
-
-  const [orders, setOrders] = useState(() => {
-    const saved = localStorage.getItem('shopez_orders');
-    return parseJSON(saved, initialOrders);
-  });
-
+  // --- Cart State (Local Session) ---
   const [cart, setCart] = useState(() => {
     const saved = localStorage.getItem('shopez_cart');
-    return parseJSON(saved, []);
+    return saved ? JSON.parse(saved) : [];
   });
 
   // --- Authentication State ---
-  const [users, setUsers] = useState(() => {
-    const saved = localStorage.getItem('shopez_users');
-    return saved ? JSON.parse(saved) : initialUsers;
-  });
-
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('shopez_current_user');
     return saved ? JSON.parse(saved) : null;
@@ -78,30 +51,35 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [checkoutMeta, setCheckoutMeta] = useState(null);
   const [animateCart, setAnimateCart] = useState(false);
-
-  // --- Live Activity Sales Ticker State ---
   const [activity, setActivity] = useState(null);
 
-  // Sync state to localStorage
-  useEffect(() => {
-    localStorage.setItem('shopez_products', JSON.stringify(products));
-  }, [products]);
+  // Load Database Data on App Mount
+  const loadDatabaseData = async () => {
+    try {
+      setLoading(true);
+      const [prodsData, revsData, ordsData] = await Promise.all([
+        fetchProducts(),
+        fetchReviews(),
+        fetchOrders()
+      ]);
+      setProducts(prodsData);
+      setReviews(revsData);
+      setOrders(ordsData);
+    } catch (err) {
+      console.error('Error loading SQLite database data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('shopez_reviews', JSON.stringify(reviews));
-  }, [reviews]);
+    loadDatabaseData();
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('shopez_orders', JSON.stringify(orders));
-  }, [orders]);
-
+  // Sync Cart & Current User to localStorage
   useEffect(() => {
     localStorage.setItem('shopez_cart', JSON.stringify(cart));
   }, [cart]);
-
-  useEffect(() => {
-    localStorage.setItem('shopez_users', JSON.stringify(users));
-  }, [users]);
 
   useEffect(() => {
     if (currentUser) {
@@ -111,13 +89,13 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Sync theme to document body and localStorage
+  // Sync Theme to body
   useEffect(() => {
     document.body.className = theme;
     localStorage.setItem('shopez_theme', theme);
   }, [theme]);
 
-  // --- Live Sales Activity Generator Interval ---
+  // Live Activity Ticker
   useEffect(() => {
     const activities = [
       { name: "Sarah Jenkins", city: "Seattle", product: "NeoBeats Wireless Headphones", action: "just purchased" },
@@ -129,20 +107,12 @@ export default function App() {
     ];
 
     const cycleActivity = () => {
-      // Pick random activity
       const randomAct = activities[Math.floor(Math.random() * activities.length)];
       setActivity(randomAct);
-
-      // Hide after 6 seconds
-      setTimeout(() => {
-        setActivity(null);
-      }, 6000);
+      setTimeout(() => setActivity(null), 6000);
     };
 
-    // Cycle activity every 15 seconds
     const interval = setInterval(cycleActivity, 15000);
-    
-    // First trigger after 4 seconds
     const initialTimeout = setTimeout(cycleActivity, 4000);
 
     return () => {
@@ -151,13 +121,9 @@ export default function App() {
     };
   }, []);
 
-  // --- Authentication Handlers ---
+  // --- Auth Handlers ---
   const handleLogin = (user) => {
     setCurrentUser(user);
-  };
-
-  const handleRegister = (newUser) => {
-    setUsers([...users, newUser]);
   };
 
   const handleLogout = () => {
@@ -221,80 +187,77 @@ export default function App() {
     setView('checkout');
   };
 
-  const handleCompleteCheckout = (receipt) => {
-    setOrders([receipt, ...orders]);
-    setProducts(prevProducts => 
-      prevProducts.map(product => {
-        const cartItem = cart.find(item => item.id === product.id);
-        if (cartItem) {
-          return {
-            ...product,
-            stock: Math.max(0, product.stock - cartItem.quantity)
-          };
-        }
-        return product;
-      })
-    );
-    setCart([]);
-  };
-
-  // --- Review Handlers ---
-  const handleAddReview = (newReview) => {
-    const reviewWithId = {
-      ...newReview,
-      id: Date.now()
-    };
-    
-    const updatedReviews = [reviewWithId, ...reviews];
-    setReviews(updatedReviews);
-
-    setProducts(prevProducts => 
-      prevProducts.map(product => {
-        if (product.id === newReview.productId) {
-          const prodReviews = updatedReviews.filter(r => r.productId === product.id);
-          const totalRatingSum = prodReviews.reduce((sum, r) => sum + r.rating, 0);
-          const avgRating = totalRatingSum / prodReviews.length;
-          
-          return {
-            ...product,
-            rating: Number(avgRating.toFixed(1)),
-            ratingCount: prodReviews.length
-          };
-        }
-        return product;
-      })
-    );
-
-    if (selectedProduct && selectedProduct.id === newReview.productId) {
-      setSelectedProduct(prev => {
-        const prodReviews = updatedReviews.filter(r => r.productId === prev.id);
-        const totalRatingSum = prodReviews.reduce((sum, r) => sum + r.rating, 0);
-        const avgRating = totalRatingSum / prodReviews.length;
-        return {
-          ...prev,
-          rating: Number(avgRating.toFixed(1)),
-          ratingCount: prodReviews.length
-        };
-      });
+  const handleCompleteCheckout = async (receipt) => {
+    try {
+      await createOrder(receipt);
+      setCart([]);
+      // Reload products & orders from SQLite DB
+      await loadDatabaseData();
+    } catch (err) {
+      console.error('Error executing database checkout order:', err);
+      alert('Error saving order to database.');
     }
   };
 
-  // --- Seller Dashboard Handlers ---
-  const handleAddProduct = (newProduct) => {
-    setProducts([...products, newProduct]);
+  // --- Review Handlers ---
+  const handleAddReview = async (newReview) => {
+    try {
+      await createReview(newReview);
+      // Reload database products & reviews
+      await loadDatabaseData();
+      
+      // Update selected product view if active
+      if (selectedProduct && selectedProduct.id === newReview.productId) {
+        const updated = await fetchProducts();
+        const target = updated.find(p => p.id === selectedProduct.id);
+        if (target) setSelectedProduct(target);
+      }
+    } catch (err) {
+      console.error('Error saving review to database:', err);
+      alert('Failed to post review to database.');
+    }
   };
 
-  const handleUpdateProduct = (updatedProduct) => {
-    setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+  // --- Seller Dashboard Database Handlers ---
+  const handleAddProduct = async (newProduct) => {
+    try {
+      await createProduct(newProduct);
+      await loadDatabaseData();
+    } catch (err) {
+      console.error('Error adding product to database:', err);
+      alert('Failed to add product.');
+    }
   };
 
-  const handleDeleteProduct = (productId) => {
-    setProducts(products.filter(p => p.id !== productId));
-    setCart(cart.filter(item => item.id !== productId));
+  const handleUpdateProduct = async (updatedProduct) => {
+    try {
+      await updateProduct(updatedProduct.id, updatedProduct);
+      await loadDatabaseData();
+    } catch (err) {
+      console.error('Error updating product in database:', err);
+      alert('Failed to update product.');
+    }
   };
 
-  const handleUpdateOrderStatus = (orderId, newStatus) => {
-    setOrders(orders.map(ord => ord.id === orderId ? { ...ord, status: newStatus } : ord));
+  const handleDeleteProduct = async (productId) => {
+    try {
+      await deleteProduct(productId);
+      setCart(cart.filter(item => item.id !== productId));
+      await loadDatabaseData();
+    } catch (err) {
+      console.error('Error deleting product from database:', err);
+      alert('Failed to delete product.');
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await updateOrderStatus(orderId, newStatus);
+      await loadDatabaseData();
+    } catch (err) {
+      console.error('Error updating order status in database:', err);
+      alert('Failed to update order status.');
+    }
   };
 
   const handleSelectProduct = (product) => {
@@ -311,22 +274,19 @@ export default function App() {
     return name[0].toUpperCase();
   };
 
-  // --- GATED ROUTER: GUEST GATED TO FULL-PAGE AUTH VIEW ---
+  // Gated Auth Screen
   if (!currentUser) {
     return (
       <AuthView 
-        users={users}
         onLogin={handleLogin}
-        onRegister={handleRegister}
       />
     );
   }
 
-  // --- MAIN APP ---
   return (
     <div className="app-container">
       
-      {/* GLOWING HEADER / NAVIGATION BAR */}
+      {/* HEADER / NAVIGATION BAR */}
       <header className="glass-panel" style={{
         position: 'sticky',
         top: 0,
@@ -341,7 +301,7 @@ export default function App() {
         gap: '16px'
       }}>
         
-        {/* Brand Identity */}
+        {/* Brand */}
         <div 
           onClick={() => { setView('catalog'); setSelectedProduct(null); }}
           style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
@@ -360,7 +320,7 @@ export default function App() {
           </h1>
         </div>
 
-        {/* Theme Accents Palette Picker */}
+        {/* Theme Accents */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', padding: '6px 12px', borderRadius: '30px' }}>
           <Palette size={14} style={{ color: 'var(--text-secondary)' }} />
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -390,7 +350,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Global Search Bar */}
+        {/* Search */}
         {view === 'catalog' && (
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1, maxWidth: '280px' }}>
             <Search size={18} style={{ position: 'absolute', left: '14px', color: 'var(--text-secondary)' }} />
@@ -436,7 +396,7 @@ export default function App() {
             <span>Seller Hub</span>
           </button>
 
-          {/* User Profile / Logout details */}
+          {/* User Profile */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div 
               title={`Logged in as ${currentUser.fullName}`}
@@ -487,82 +447,91 @@ export default function App() {
       {/* CORE ROUTER BODY CONTAINER */}
       <main style={{ flex: 1, width: '100%', maxWidth: '1240px', margin: '0 auto', padding: '0 24px 40px 24px' }}>
         
-        {/* Marketplace Catalog Grid */}
-        {view === 'catalog' && (
-          <div>
-            {searchQuery === '' && (
-              <div className="hero-banner animate-fade-in" style={{ marginTop: '24px' }}>
-                <h1 style={{ letterSpacing: '-0.04em' }}>Welcome back, {currentUser.fullName.split(' ')[0]}!</h1>
-                <p>
-                  Browse our fresh collection of premium goods. Don't forget to use coupon <b>SHOPEZ20</b> in your cart for 20% off!
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
-                  <button 
-                    onClick={() => {
-                      const el = document.querySelector('.catalog-container');
-                      if (el) el.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                    className="btn-primary"
-                  >
-                    <span>Start Shopping</span>
-                  </button>
-                  <button 
-                    onClick={() => setView('dashboard')}
-                    className="btn-secondary"
-                  >
-                    <span>Go to Seller Hub</span>
-                  </button>
-                </div>
+        {loading ? (
+          <div className="glass-panel" style={{ padding: '80px', textAlign: 'center', margin: '40px 0' }}>
+            <Sparkles className="pulse-indicator" size={32} style={{ color: 'var(--accent-neon)', marginBottom: '16px' }} />
+            <h3 style={{ fontSize: '1.25rem' }}>Loading SQLite Database...</h3>
+          </div>
+        ) : (
+          <>
+            {/* Catalog Grid */}
+            {view === 'catalog' && (
+              <div>
+                {searchQuery === '' && (
+                  <div className="hero-banner animate-fade-in" style={{ marginTop: '24px' }}>
+                    <h1 style={{ letterSpacing: '-0.04em' }}>Welcome back, {currentUser.fullName.split(' ')[0]}!</h1>
+                    <p>
+                      Browse our database-powered store. Don't forget to use coupon <b>SHOPEZ20</b> in your cart for 20% off!
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
+                      <button 
+                        onClick={() => {
+                          const el = document.querySelector('.catalog-container');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="btn-primary"
+                      >
+                        <span>Start Shopping</span>
+                      </button>
+                      <button 
+                        onClick={() => setView('dashboard')}
+                        className="btn-secondary"
+                      >
+                        <span>Go to Seller Hub</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <CatalogView 
+                  products={products}
+                  searchQuery={searchQuery}
+                  onSelectProduct={handleSelectProduct}
+                  onAddToCart={handleAddToCart}
+                />
               </div>
             )}
 
-            <CatalogView 
-              products={products}
-              searchQuery={searchQuery}
-              onSelectProduct={handleSelectProduct}
-              onAddToCart={handleAddToCart}
-            />
-          </div>
-        )}
+            {/* Product Details */}
+            {view === 'product-details' && selectedProduct && (
+              <ProductDetailsView 
+                product={selectedProduct}
+                reviews={reviews}
+                currentUser={currentUser}
+                onBack={() => setView('catalog')}
+                onAddToCart={handleAddToCart}
+                onAddReview={handleAddReview}
+              />
+            )}
 
-        {/* Detailed Product spec view */}
-        {view === 'product-details' && selectedProduct && (
-          <ProductDetailsView 
-            product={selectedProduct}
-            reviews={reviews}
-            currentUser={currentUser}
-            onBack={() => setView('catalog')}
-            onAddToCart={handleAddToCart}
-            onAddReview={handleAddReview}
-          />
-        )}
+            {/* Checkout Wizard */}
+            {view === 'checkout' && (
+              <CheckoutFlow 
+                cart={cart}
+                checkoutMeta={checkoutMeta}
+                currentUser={currentUser}
+                onCompleteCheckout={handleCompleteCheckout}
+                onCancel={() => { setView('catalog'); setCheckoutMeta(null); }}
+              />
+            )}
 
-        {/* Multi-step checkout wizard */}
-        {view === 'checkout' && (
-          <CheckoutFlow 
-            cart={cart}
-            checkoutMeta={checkoutMeta}
-            currentUser={currentUser}
-            onCompleteCheckout={handleCompleteCheckout}
-            onCancel={() => { setView('catalog'); setCheckoutMeta(null); }}
-          />
-        )}
-
-        {/* Seller Inventory analytics Dashboard */}
-        {view === 'dashboard' && (
-          <SellerDashboard 
-            products={products}
-            orders={orders}
-            onAddProduct={handleAddProduct}
-            onUpdateProduct={handleUpdateProduct}
-            onDeleteProduct={handleDeleteProduct}
-            onUpdateOrderStatus={handleUpdateOrderStatus}
-          />
+            {/* Seller Hub */}
+            {view === 'dashboard' && (
+              <SellerDashboard 
+                products={products}
+                orders={orders}
+                onAddProduct={handleAddProduct}
+                onUpdateProduct={handleUpdateProduct}
+                onDeleteProduct={handleDeleteProduct}
+                onUpdateOrderStatus={handleUpdateOrderStatus}
+              />
+            )}
+          </>
         )}
 
       </main>
 
-      {/* SLIDING SHOPPING CART DRAWER SIDEBAR */}
+      {/* SHOPPING CART DRAWER */}
       <CartDrawer 
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -572,7 +541,7 @@ export default function App() {
         onProceedToCheckout={handleLaunchCheckout}
       />
 
-      {/* LIVE SALES SOCIAL PROOF TICKER TOAST */}
+      {/* LIVE SALES TICKER TOAST */}
       {activity && (
         <div 
           className="glass-panel"
@@ -591,7 +560,6 @@ export default function App() {
             animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards'
           }}
         >
-          {/* Pulsing indicator */}
           <div style={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
             <div className="pulse-indicator" style={{
               width: '10px',
