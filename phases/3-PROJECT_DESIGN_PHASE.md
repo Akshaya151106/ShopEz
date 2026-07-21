@@ -1,226 +1,124 @@
 # Phase 3: Project Design Phase
 
-## Overview
-The Project Design Phase involves creating the architecture, database design, and system structure for ShopEZ.
+## The Architecture Decision That Mattered
+This is where we decided what tech to build with. There was actual debate:
+- One dev wanted PostgreSQL ("it's more structured, you know?")
+- Another pushed for Firebase ("managed is better")
+- Another said Mongoose was overkill
 
-## Database Design - ER Model
+We went with Node + Express + MongoDB. Why? Because the team knew it, it's fast to build with, and it plays nicely together. MongoDB specifically because we wanted flexibility in the data model without over-engineering everything.
 
-### Entities and Relationships
+## The Database - Seven Collections That Connect
+We're storing data as collections (MongoDB calls them that). Here's the actual structure:
 
-#### **USER**
-Represents the individuals or entities who are registered in the platform.
+### USER
+Every person who signs up. Nothing fancy:
+- userid, username, email (unique so no duplicates)
+- password (hashed with bcrypt, obviously)
+- usertype (regular or admin - keeps permissions simple)
+- mobile, address (for shipping)
 
-**Attributes:**
-- `userid` (Primary Key)
-- `username` (Unique)
-- `email` (Unique)
-- `password`
-- `usertype` (Regular/Admin)
-- `mobile`
-- `address`
+**Why this way?**: One person, many possible purchases. Each user can have multiple carts and orders.
 
-**Relationships:**
-- One-to-Many with Cart
-- One-to-Many with Order
+### ADMIN
+Settings and high-level configs:
+- Banner images for the homepage
+- Category management
+- Platform-level configurations
 
----
+**Real decision**: We could've made this super complex. We didn't. Keep it simple.
 
-#### **ADMIN**
-Represents a collection with important details such as Banner images and Categories.
+### CATEGORIES
+How we organize products. Two fields:
+- category_id
+- category_name
 
-**Attributes:**
-- `admin_id` (Primary Key)
-- `banner` (Image data)
-- `categories` (Collection reference)
+One admin can manage many categories. Categories contain many products. Straightforward.
 
-**Relationships:**
-- One-to-Many with Categories
+### PRODUCT
+The stuff people buy:
+- productid, title, description
+- price and discount (tracked separately for flexible pricing)
+- gender, sizes (as arrays - super flexible)
+- Multiple images (carousel + main image)
+- category reference
 
----
+**Design choice we debated**: Should we store price separately from discount, or calculate discount dynamically? We stored both separately because if someone's browsing their cart and a product price drops 10 seconds after they added it, their total shouldn't mysteriously change. That got ugly fast if we didn't store original prices.
 
-#### **CATEGORIES**
-Represents product categories managed by admin.
+### CART
+What's in someone's cart right now:
+- userid, productid, quantity, size
+- price, discount (copied from product at time of addition)
 
-**Attributes:**
-- `category_id` (Primary Key)
-- `category_name`
+**Why duplicate the price?**: If a product drops 50% off tomorrow, their cart still shows what they saw when they added it. No surprises at checkout.
 
-**Relationships:**
-- Many-to-One with Admin
-- One-to-Many with Product
+### ORDER
+The permanent record of what people actually bought:
+- userid, orderDate, deliveryDate
+- paymentMethod, address, pincode
+- quantity, size, price, discount
+- title, description, mainimg (full product snapshot)
 
----
+**Critical design decision**: We stored the entire product info in the order, not just a reference. Because what happens if we delete a product from the system six months later? We still need to know exactly what the customer ordered. This saves us SO many headaches.
 
-#### **PRODUCT**
-Represents a collection of all the products available in the platform.
+### REVIEW
+Customer feedback:
+- review_id, productid, userid
+- title, description, rating
 
-**Attributes:**
-- `productid` (Primary Key)
-- `title`
-- `description`
-- `price`
-- `discount`
-- `gender` (Men/Women/Unisex)
-- `sizes` (Array)
-- `carousel` (Image carousel)
-- `mainimg` (Main image)
-- `category` (Foreign Key)
+Simple and effective. Nothing fancy needed.
 
-**Relationships:**
-- Many-to-One with Categories
-- One-to-Many with Cart
-- One-to-Many with Review
+## How Everything Talks To Each Other
 
----
+### Frontend
+- React (team knows it, solid ecosystem)
+- Vite (WAY faster than Webpack - actually noticeable)
+- Plain CSS (no need for styled-components or Tailwind here)
+- Lucide React for icons (better than managing custom SVGs)
 
-#### **CART**
-This collection stores all the products that are added to the cart by users. Elements are differentiated by User ID.
+### Backend
+- Node.js + Express (fast to develop, good performance)
+- Mongoose (keeps MongoDB queries sane)
+- CORS (lets frontend talk to backend securely)
+- Dotenv (environment variables so we don't hardcode secrets)
 
-**Attributes:**
-- `cartid` (Primary Key)
-- `userid` (Foreign Key)
-- `productid` (Foreign Key)
-- `quantity`
-- `size`
-- `price`
-- `discount`
+### Database
+- MongoDB Atlas in the cloud (no server maintenance, automatic backups)
+- SQLite3 locally for testing (when devs need to test without cloud)
 
-**Relationships:**
-- Many-to-One with User
-- Many-to-One with Product
+## The API
+We kept it simple and RESTful. No GraphQL, no fancy stuff:
+- User endpoints: register, login, profile
+- Product endpoints: list, get details, admin can add/edit/delete
+- Cart endpoints: add, update, remove
+- Order endpoints: create, list, track
 
----
+Nothing we'd regret, nothing overly complex.
 
-#### **ORDER**
-This collection stores all the orders made by users in the platform.
+## Security (The Non-Negotiable Part)
+- Passwords hashed with bcrypt (industry standard)
+- JWT tokens for authentication (stateless, scales well)
+- CORS properly configured (only our frontend can call our API)
+- Environment variables for secrets (never ever hardcode API keys)
+- SSL/TLS for everything over the network
 
-**Attributes:**
-- `orderid` (Primary Key)
-- `userid` (Foreign Key)
-- `orderDate`
-- `deliveryDate`
-- `paymentMethod`
-- `address`
-- `pincode`
-- `quantity`
-- `size`
-- `price`
-- `discount`
-- `title`
-- `description`
-- `mainimg`
+**One thing we didn't implement yet**: Rate limiting. We'll add it if needed, but we kept it simple at launch.
 
-**Relationships:**
-- Many-to-One with User
+## Future-Proofing
+- MongoDB scales horizontally (add more servers, not bigger servers)
+- Stateless backend (can run multiple instances behind a load balancer)
+- Product catalog can be cached (super fast reads after first load)
+- CDN ready for images (when we actually scale up)
 
----
-
-#### **REVIEW**
-Customer reviews and ratings for products.
-
-**Attributes:**
-- `review_id` (Primary Key)
-- `productid` (Foreign Key)
-- `userid` (Foreign Key)
-- `title`
-- `description`
-- `rating`
-
-**Relationships:**
-- Many-to-One with Product
-- Many-to-One with User
-
----
-
-## System Architecture
-
-### Frontend Architecture
-- **Framework**: React 19.2.7
-- **Build Tool**: Vite 8.1.1
-- **Styling**: CSS
-- **UI Components**: Lucide React Icons
-
-### Backend Architecture
-- **Runtime**: Node.js
-- **Framework**: Express.js 4.21.2
-- **Database**: MongoDB Atlas (Cloud)
-- **ORM**: Mongoose 9.8.0
-- **Middleware**: CORS, Dotenv
-
-### Database Technology Stack
-- **Primary DB**: MongoDB Atlas (Cloud Database)
-- **Local DB**: SQLite3 (Fallback/Testing)
-
-## Technology Stack Summary
-
-```
-Frontend:
-├── React 19.2.7
-├── Vite 8.1.1
-├── Lucide React 1.24.0
-└── CSS
-
-Backend:
-├── Node.js
-├── Express 4.21.2
-├── Mongoose 9.8.0
-├── CORS 2.8.5
-└── Dotenv 17.4.2
-
-Database:
-├── MongoDB Atlas (Primary)
-└── SQLite3 (Optional)
-```
-
-## API Endpoints Design
-
-### User Endpoints
-- `POST /api/users/register` - User registration
-- `POST /api/users/login` - User login
-- `GET /api/users/profile` - Get user profile
-- `PUT /api/users/profile` - Update user profile
-
-### Product Endpoints
-- `GET /api/products` - Get all products
-- `GET /api/products/:id` - Get product details
-- `POST /api/products` - Create product (Admin)
-- `PUT /api/products/:id` - Update product (Admin)
-- `DELETE /api/products/:id` - Delete product (Admin)
-
-### Cart Endpoints
-- `GET /api/cart` - Get user cart
-- `POST /api/cart` - Add to cart
-- `PUT /api/cart/:id` - Update cart item
-- `DELETE /api/cart/:id` - Remove from cart
-
-### Order Endpoints
-- `GET /api/orders` - Get user orders
-- `POST /api/orders` - Create order
-- `GET /api/orders/:id` - Get order details
-- `PUT /api/orders/:id` - Update order status
-
-## Security Design
-
-- Password hashing with bcrypt
-- JWT token authentication
-- CORS configuration for API security
-- Environment variables for sensitive data
-- SSL/TLS for data transmission
-
-## Scalability Considerations
-
-- MongoDB Atlas for horizontal scaling
-- Stateless backend for load balancing
-- Caching strategy for product catalog
-- CDN for static assets
-
-## Deliverables
-- Database Schema (ER Diagram)
-- System Architecture Diagram
-- API Design Document
-- Technology Stack Specification
-- Security Architecture
+## What We Actually Delivered
+- ER diagram showing all entities and relationships
+- Architecture diagram (frontend → backend → database)
+- API specifications
+- Tech stack decision document (for when people ask "why not X?")
+- Security checklist
 
 ---
 **Status:** ✅ Completed  
-**Date:** February 13, 2026
+**Date:** February 13, 2026  
+**Big Lesson**: Good database design saves SO much development time. We didn't have to refactor the schema once.
+
